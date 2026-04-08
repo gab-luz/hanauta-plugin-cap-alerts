@@ -1,0 +1,16 @@
+{
+  "plugin_id": "cap_alerts",
+  "tasks": [
+    {
+      "id": "refresh_cap_alerts",
+      "enabled": true,
+      "interval_seconds": 60,
+      "timeout_seconds": 20,
+      "working_dir": "${PLUGIN_DIR}",
+      "command": [
+        "python3",
+        "${PLUGIN_DIR}/service_fetch_alerts.py"
+      ]
+    }
+  ]
+}

@@ -23,17 +23,32 @@ from PyQt6.QtWidgets import (
 )
 
 HERE = Path(__file__).resolve().parent
-APP_DIR = HERE.parents[1]
-ROOT = HERE.parents[3]
-FONTS_DIR = ROOT / "assets" / "fonts"
+
+
+def _resolve_app_dir() -> Path:
+    candidates = [
+        Path.home() / ".config" / "i3" / "hanauta" / "src",
+        HERE.parent / ".config" / "i3" / "hanauta" / "src",
+        HERE.parents[2] / "src",
+    ]
+    for candidate in candidates:
+        if (candidate / "pyqt" / "shared" / "runtime.py").exists():
+            return candidate
+    return Path.home() / ".config" / "i3" / "hanauta" / "src"
+
+
+APP_DIR = _resolve_app_dir()
 DEFAULT_ALERT_SOUND = Path("/usr/share/sounds/freedesktop/stereo/complete.ogg")
 
 if str(APP_DIR) not in sys.path:
     sys.path.append(str(APP_DIR))
 
 from pyqt.shared.runtime import entry_command
+from pyqt.shared.cap_alerts import cap_alert_accent
 from pyqt.shared.theme import blend, load_theme_palette, rgba
 from pyqt.shared.weather import AnimatedWeatherIcon, animated_icon_path
+
+FONTS_DIR = APP_DIR.parents[1] / "assets" / "fonts"
 
 
 MATERIAL_ICONS = {
@@ -77,7 +92,18 @@ def material_icon(name: str) -> str:
 
 
 class CapAlertOverlay(QWidget):
-    def __init__(self, title: str, headline: str, area: str, tip: str, contact: str, url: str, icon_name: str) -> None:
+    def __init__(
+        self,
+        title: str,
+        headline: str,
+        area: str,
+        tip: str,
+        contact: str,
+        url: str,
+        icon_name: str,
+        severity: str,
+        alert_color: str,
+    ) -> None:
         super().__init__()
         fonts = load_app_fonts()
         self.ui_font = detect_font("Rubik", fonts.get("ui_sans", ""), "Inter", "Noto Sans", "Sans Serif")
@@ -91,6 +117,9 @@ class CapAlertOverlay(QWidget):
         self.contact_text = contact.strip() or "Official local emergency services"
         self.url = url.strip()
         self.icon_name = icon_name.strip() or "warning"
+        self.severity = severity.strip() or "Unknown"
+        self.alert_color = alert_color.strip()
+        self.accent = cap_alert_accent(self.severity, self.alert_color)
         self._fade: QPropertyAnimation | None = None
         self._audio_process: subprocess.Popen[str] | None = None
         self._i3_rules_applied = False
@@ -260,7 +289,7 @@ class CapAlertOverlay(QWidget):
 
     def _apply_styles(self) -> None:
         theme = self.theme
-        accent = "#f6cf5a"
+        accent = self.accent
         self.setStyleSheet(
             f"""
             QWidget {{
@@ -442,6 +471,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--contact", default="")
     parser.add_argument("--url", default="")
     parser.add_argument("--icon", default="warning")
+    parser.add_argument("--severity", default="Unknown")
+    parser.add_argument("--alert-color", default="")
     return parser.parse_args(argv)
 
 
@@ -449,7 +480,17 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv if argv is not None else sys.argv[1:])
     app = QApplication(sys.argv)
     app.setApplicationName("Hanauta CAP Alert")
-    window = CapAlertOverlay(args.title, args.headline, args.area, args.tip, args.contact, args.url, args.icon)
+    window = CapAlertOverlay(
+        args.title,
+        args.headline,
+        args.area,
+        args.tip,
+        args.contact,
+        args.url,
+        args.icon,
+        args.severity,
+        args.alert_color,
+    )
     window.show()
     window.raise_()
     window.activateWindow()

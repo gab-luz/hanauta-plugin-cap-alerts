@@ -5,8 +5,9 @@ import signal
 import sys
 from pathlib import Path
 
-from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, QThread, QTimer, Qt, QUrl, pyqtSignal
-from PyQt6.QtGui import QColor, QCursor, QDesktopServices, QFont, QFontDatabase, QGuiApplication
+from PyQt6.QtCore import QByteArray, QEasingCurve, QPropertyAnimation, QSize, QThread, QTimer, Qt, QUrl, pyqtSignal
+from PyQt6.QtGui import QColor, QCursor, QDesktopServices, QFont, QFontDatabase, QGuiApplication, QIcon, QPainter, QPixmap
+from PyQt6.QtSvg import QSvgRenderer
 from PyQt6.QtWidgets import (
     QApplication,
     QFrame,
@@ -20,24 +21,47 @@ from PyQt6.QtWidgets import (
 )
 
 HERE = Path(__file__).resolve().parent
-APP_DIR = HERE.parents[1]
-ROOT = HERE.parents[3]
-FONTS_DIR = ROOT / "assets" / "fonts"
+
+
+def _resolve_app_dir() -> Path:
+    candidates = [
+        Path.home() / ".config" / "i3" / "hanauta" / "src",
+        HERE.parent / ".config" / "i3" / "hanauta" / "src",
+        HERE.parents[2] / "src",
+    ]
+    for candidate in candidates:
+        if (candidate / "pyqt" / "shared" / "runtime.py").exists():
+            return candidate
+    return Path.home() / ".config" / "i3" / "hanauta" / "src"
+
+
+APP_DIR = _resolve_app_dir()
 
 if str(APP_DIR) not in sys.path:
     sys.path.append(str(APP_DIR))
 
-from pyqt.shared.button_helpers import create_close_button
-from pyqt.shared.cap_alerts import CapAlert, configured_alert_location, fallback_tip, fetch_active_alerts, relative_expiry, test_mode_enabled
+from pyqt.shared.cap_alerts import (
+    CapAlert,
+    alert_accent_color,
+    configured_alert_location,
+    fallback_tip,
+    fetch_active_alerts,
+    relative_expiry,
+    test_mode_enabled,
+)
 from pyqt.shared.runtime import entry_command
-from pyqt.shared.theme import load_theme_palette, palette_mtime, rgba
+from pyqt.shared.theme import load_theme_palette, palette_mtime, relative_luminance, rgba
 from pyqt.shared.weather import AnimatedWeatherIcon, animated_icon_path
 
+FONTS_DIR = APP_DIR.parents[1] / "assets" / "fonts"
+PLUGIN_ASSETS_DIR = HERE / "assets"
+ICON_FALLBACK_DIR = PLUGIN_ASSETS_DIR / "material-symbols"
 
 SETTINGS_PAGE_SCRIPT = APP_DIR / "pyqt" / "settings-page" / "settings.py"
 MATERIAL_ICONS = {
     "warning": "\ue002",
     "settings": "\ue8b8",
+    "refresh": "\ue5d5",
     "close": "\ue5cd",
     "open_in_new": "\ue89e",
     "call": "\ue0b0",
@@ -72,6 +96,27 @@ def detect_font(*families: str) -> str:
 
 def material_icon(name: str) -> str:
     return MATERIAL_ICONS.get(name, "?")
+
+
+def fallback_icon_path(name: str) -> Path:
+    return ICON_FALLBACK_DIR / f"{name}.svg"
+
+
+def _render_svg_icon(path: Path, color_hex: str, size: QSize) -> QIcon:
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except Exception:
+        return QIcon()
+    svg = raw.replace("currentColor", color_hex)
+    renderer = QSvgRenderer(QByteArray(svg.encode("utf-8")))
+    if not renderer.isValid():
+        return QIcon()
+    pixmap = QPixmap(size)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    renderer.render(painter)
+    painter.end()
+    return QIcon(pixmap)
 
 
 class AlertWorker(QThread):
@@ -123,6 +168,7 @@ class AlertCard(QFrame):
         for text in (alert.severity, alert.urgency, relative_expiry(alert) or "Live"):
             chip = QLabel(text)
             chip.setObjectName("metaChip")
+            chip.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
             chip.setAlignment(Qt.AlignmentFlag.AlignCenter)
             chip.setFont(QFont(ui_font, 9, QFont.Weight.DemiBold))
             meta_row.addWidget(chip, 0)
@@ -164,10 +210,18 @@ class AlertCard(QFrame):
 
         actions = QHBoxLayout()
         actions.addStretch(1)
-        open_button = QPushButton(f"{material_icon('open_in_new')} Open official alert")
+        open_button = QPushButton("Open official alert")
         open_button.setObjectName("alertButton")
         open_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         open_button.setFont(QFont(ui_font, 10, QFont.Weight.DemiBold))
+        open_icon = _render_svg_icon(
+            fallback_icon_path("open_in_new"),
+            "#101114",
+            QSize(18, 18),
+        )
+        if not open_icon.isNull():
+            open_button.setIcon(open_icon)
+            open_button.setIconSize(QSize(18, 18))
         open_button.clicked.connect(self._open_link)
         actions.addWidget(open_button)
         layout.addLayout(actions)
@@ -186,6 +240,7 @@ class CapAlertsPopup(QWidget):
         self.icon_font = detect_font(fonts.get("material_icons", ""), "Material Icons", self.ui_font)
         self.material_font = self.icon_font
         self.theme = load_theme_palette()
+        self._accent = "#F6C945"
         self._theme_mtime = palette_mtime()
         self._fade: QPropertyAnimation | None = None
         self.worker: AlertWorker | None = None
@@ -243,13 +298,25 @@ class CapAlertsPopup(QWidget):
 
         actions = QHBoxLayout()
         actions.setSpacing(8)
+        self.refresh_button = QPushButton(material_icon("refresh"))
+        self.refresh_button.setObjectName("iconButton")
+        self.refresh_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        self.refresh_button.setFont(QFont(self.icon_font, 18))
+        self.refresh_button.clicked.connect(self.refresh_alerts)
         self.settings_button = QPushButton(material_icon("settings"))
         self.settings_button.setObjectName("iconButton")
         self.settings_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         self.settings_button.setFont(QFont(self.icon_font, 18))
         self.settings_button.clicked.connect(self._open_region_settings)
-        self.close_button = create_close_button(material_icon("close"), self.material_font)
+        self.close_button = QPushButton(material_icon("close"))
+        self.close_button.setObjectName("iconButton")
+        self.close_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        self.close_button.setFont(QFont(self.icon_font, 18))
         self.close_button.clicked.connect(self.close)
+        self._apply_header_icon_fallbacks()
+        self.refresh_button.setToolTip("Refresh alerts")
+        self.close_button.setToolTip("Close")
+        actions.addWidget(self.refresh_button)
         actions.addWidget(self.settings_button)
         actions.addWidget(self.close_button)
         header.addLayout(actions)
@@ -283,6 +350,7 @@ class CapAlertsPopup(QWidget):
         self.hero_meta_row.setSpacing(8)
         self.hero_scope = QLabel("Live feed")
         self.hero_scope.setObjectName("metaChip")
+        self.hero_scope.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.hero_scope.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.hero_scope.setFont(QFont(self.ui_font, 9, QFont.Weight.DemiBold))
         self.hero_location = QLabel("Waiting for location")
@@ -339,8 +407,8 @@ class CapAlertsPopup(QWidget):
 
     def _apply_styles(self) -> None:
         theme = self.theme
-        yellow = "#F6C945"
-        yellow_soft = "rgba(246,201,69,0.18)"
+        accent = self._accent
+        accent_soft = rgba(accent, 0.18)
         self.setStyleSheet(
             f"""
             QWidget {{
@@ -358,7 +426,7 @@ class CapAlertsPopup(QWidget):
                 border-radius: 30px;
             }}
             QLabel#eyebrow {{
-                color: {yellow};
+                color: {accent};
                 letter-spacing: 1.8px;
             }}
             QLabel#subtitle, QLabel#status, QLabel#alertBody, QLabel#alertContacts, QLabel#heroMeta, QLabel#alertHeadline {{
@@ -368,10 +436,10 @@ class CapAlertsPopup(QWidget):
                 background: qlineargradient(
                     x1: 0, y1: 0, x2: 1, y2: 1,
                     stop: 0 {rgba(theme.primary_container, 0.26)},
-                    stop: 0.45 {rgba(yellow, 0.20)},
+                    stop: 0.45 {rgba(accent, 0.20)},
                     stop: 1 {rgba(theme.surface_container_high, 0.94)}
                 );
-                border: 1px solid {rgba(yellow, 0.22)};
+                border: 1px solid {rgba(accent, 0.22)};
                 border-radius: 24px;
             }}
             QLabel#heroTitle, QLabel#title, QLabel#alertEvent {{
@@ -383,16 +451,17 @@ class CapAlertsPopup(QWidget):
                 border-radius: 24px;
             }}
             QLabel#metaChip {{
-                background: {rgba(yellow, 0.12)};
-                border: 1px solid {rgba(yellow, 0.22)};
+                background: {rgba(accent, 0.12)};
+                border: 1px solid {rgba(accent, 0.22)};
                 border-radius: 999px;
-                color: {yellow};
+                color: {accent};
                 padding: 6px 10px;
+                min-height: 24px;
             }}
             QLabel#alertTip {{
                 color: {theme.text};
-                background: {yellow_soft};
-                border: 1px solid rgba(246,201,69,0.22);
+                background: {accent_soft};
+                border: 1px solid {rgba(accent, 0.22)};
                 border-radius: 16px;
                 padding: 10px 12px;
             }}
@@ -404,11 +473,11 @@ class CapAlertsPopup(QWidget):
             QPushButton#iconButton {{
                 background: {rgba(theme.surface_container_high, 0.90)};
                 color: {theme.primary};
-                border: 1px solid {rgba(theme.outline, 0.16)};
+                border: none;
                 border-radius: 19px;
             }}
             QPushButton#alertButton {{
-                background: rgba(246,201,69,0.92);
+                background: {rgba(accent, 0.92)};
                 color: #101114;
                 border: none;
                 border-radius: 16px;
@@ -436,6 +505,27 @@ class CapAlertsPopup(QWidget):
         self._theme_mtime = current_mtime
         self.theme = load_theme_palette()
         self._apply_styles()
+        self._apply_header_icon_fallbacks()
+
+    def _header_icon_color(self) -> str:
+        return "#FFFFFF" if relative_luminance(self.theme.surface_container_high) < 0.20 else self.theme.primary
+
+    def _set_svg_icon_fallback(self, button: QPushButton, name: str, color_hex: str) -> None:
+        icon_path = fallback_icon_path(name)
+        if not icon_path.exists():
+            return
+        icon = _render_svg_icon(icon_path, color_hex, QSize(20, 20))
+        if icon.isNull():
+            return
+        button.setText("")
+        button.setIcon(icon)
+        button.setIconSize(QSize(20, 20))
+
+    def _apply_header_icon_fallbacks(self) -> None:
+        color_hex = self._header_icon_color()
+        self._set_svg_icon_fallback(self.refresh_button, "refresh", color_hex)
+        self._set_svg_icon_fallback(self.settings_button, "settings", color_hex)
+        self._set_svg_icon_fallback(self.close_button, "close", color_hex)
 
     def refresh_alerts(self) -> None:
         if self.worker is not None and self.worker.isRunning():
@@ -454,6 +544,8 @@ class CapAlertsPopup(QWidget):
         demo = test_mode_enabled()
         label = location.label if hasattr(location, "label") else ("demo mode" if demo else "your saved location")
         if not isinstance(alerts, list) or not alerts:
+            self._accent = "#F6C945"
+            self._apply_styles()
             self.title_label.setText("No active official alerts")
             self.hero_title.setText("No current alert bulletin")
             self.hero_location.setText(label)
@@ -461,12 +553,14 @@ class CapAlertsPopup(QWidget):
             self.status_label.setText(
                 "Demo mode is enabled but no sample alerts were generated."
                 if demo
-                else f"No active NWS alerts for {label}."
+                else f"No active official alerts for {label}."
             )
             return
         self.title_label.setText(f"{len(alerts)} active alert(s)")
         top = alerts[0] if isinstance(alerts[0], CapAlert) else None
         if top is not None:
+            self._accent = alert_accent_color(top)
+            self._apply_styles()
             self.hero_title.setText(top.event)
             self.hero_icon.set_icon_path(animated_icon_path(top.icon_name))
         self.hero_scope.setText("Demo feed" if demo else "Live feed")
