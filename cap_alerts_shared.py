@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import importlib.util
 import random
+import sys
 import unicodedata
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -9,7 +11,29 @@ from pathlib import Path
 from typing import Any
 from urllib import parse, request
 
-from pyqt.shared.weather import WeatherCity, configured_location
+
+def _load_weather_backend():
+    candidates = [
+        Path.home() / "dev" / "hanauta-plugin-weather" / "weather_backend.py",
+    ]
+    for candidate in candidates:
+        if not candidate.exists():
+            continue
+        spec = importlib.util.spec_from_file_location("hanauta_plugin_weather_backend", candidate)
+        if spec is None or spec.loader is None:
+            continue
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        return module
+    raise ImportError("weather backend not found")
+
+
+_WEATHER = _load_weather_backend()
+WeatherCity = _WEATHER.WeatherCity
+configured_location = _WEATHER.configured_location
+AnimatedWeatherIcon = _WEATHER.AnimatedWeatherIcon
+animated_icon_path = _WEATHER.animated_icon_path
 
 
 NWS_ALERTS_API = "https://api.weather.gov/alerts/active"

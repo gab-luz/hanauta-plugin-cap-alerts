@@ -44,9 +44,8 @@ if str(APP_DIR) not in sys.path:
     sys.path.append(str(APP_DIR))
 
 from pyqt.shared.runtime import entry_command
-from pyqt.shared.cap_alerts import cap_alert_accent
+from cap_alerts_shared import AnimatedWeatherIcon, animated_icon_path, cap_alert_accent
 from pyqt.shared.theme import blend, load_theme_palette, rgba
-from pyqt.shared.weather import AnimatedWeatherIcon, animated_icon_path
 
 FONTS_DIR = APP_DIR.parents[1] / "assets" / "fonts"
 

@@ -40,9 +40,11 @@ APP_DIR = _resolve_app_dir()
 if str(APP_DIR) not in sys.path:
     sys.path.append(str(APP_DIR))
 
-from pyqt.shared.cap_alerts import (
+from cap_alerts_shared import (
+    AnimatedWeatherIcon,
     CapAlert,
     alert_accent_color,
+    animated_icon_path,
     configured_alert_location,
     fallback_tip,
     fetch_active_alerts,
@@ -51,7 +53,6 @@ from pyqt.shared.cap_alerts import (
 )
 from pyqt.shared.runtime import entry_command
 from pyqt.shared.theme import load_theme_palette, palette_mtime, relative_luminance, rgba
-from pyqt.shared.weather import AnimatedWeatherIcon, animated_icon_path
 
 FONTS_DIR = APP_DIR.parents[1] / "assets" / "fonts"
 PLUGIN_ASSETS_DIR = HERE / "assets"
