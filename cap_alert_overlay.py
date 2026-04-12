@@ -8,8 +8,21 @@ import subprocess
 import sys
 from pathlib import Path
 
-from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, QTimer, Qt
-from PyQt6.QtGui import QColor, QCursor, QDesktopServices, QFont, QFontDatabase, QGuiApplication, QKeySequence, QShortcut
+from PyQt6.QtCore import QByteArray, QEasingCurve, QPropertyAnimation, QSize, QTimer, Qt
+from PyQt6.QtGui import (
+    QColor,
+    QCursor,
+    QDesktopServices,
+    QFont,
+    QFontDatabase,
+    QGuiApplication,
+    QIcon,
+    QKeySequence,
+    QPainter,
+    QPixmap,
+    QShortcut,
+)
+from PyQt6.QtSvg import QSvgRenderer
 from PyQt6.QtWidgets import (
     QApplication,
     QFrame,
@@ -58,6 +71,7 @@ MATERIAL_ICONS = {
 
 POPUP_SCRIPT = HERE / "cap_alerts_popup.py"
 SETTINGS_SCRIPT = APP_DIR / "pyqt" / "settings-page" / "settings.py"
+ICON_FALLBACK_DIR = HERE / "assets" / "material-symbols"
 
 
 def load_app_fonts() -> dict[str, str]:
@@ -88,6 +102,27 @@ def detect_font(*families: str) -> str:
 
 def material_icon(name: str) -> str:
     return MATERIAL_ICONS.get(name, "?")
+
+
+def fallback_icon_path(name: str) -> Path:
+    return ICON_FALLBACK_DIR / f"{name}.svg"
+
+
+def _render_svg_icon(path: Path, color_hex: str, size: QSize) -> QIcon:
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except Exception:
+        return QIcon()
+    svg = raw.replace("currentColor", color_hex)
+    renderer = QSvgRenderer(QByteArray(svg.encode("utf-8")))
+    if not renderer.isValid():
+        return QIcon()
+    pixmap = QPixmap(size)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    renderer.render(painter)
+    painter.end()
+    return QIcon(pixmap)
 
 
 class CapAlertOverlay(QWidget):
@@ -263,11 +298,11 @@ class CapAlertOverlay(QWidget):
         actions_layout.setContentsMargins(10, 10, 10, 10)
         actions_layout.setSpacing(12)
 
-        dismiss = self._button("Dismiss", material_icon("close"), primary=False)
+        dismiss = self._button("Dismiss", "close", primary=False)
         dismiss.clicked.connect(self.close)
-        details = self._button("Open Details", material_icon("open_in_new"), primary=True)
+        details = self._button("Open Details", "open_in_new", primary=True)
         details.clicked.connect(self._open_details)
-        region = self._button("Region Settings", material_icon("warning"), primary=False)
+        region = self._button("Region Settings", "warning", primary=False)
         region.clicked.connect(self._open_region)
         actions_layout.addWidget(dismiss)
         actions_layout.addWidget(details)
@@ -277,13 +312,19 @@ class CapAlertOverlay(QWidget):
         backdrop_layout.addWidget(self.card, 0, Qt.AlignmentFlag.AlignCenter)
         root.addWidget(backdrop)
 
-    def _button(self, label: str, icon_text: str, *, primary: bool) -> QPushButton:
-        button = QPushButton(f"{icon_text}  {label}")
+    def _button(self, label: str, icon_name: str, *, primary: bool) -> QPushButton:
+        button = QPushButton(label)
         button.setObjectName("primaryButton" if primary else "secondaryButton")
         button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         button.setMinimumHeight(48)
         button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         button.setFont(QFont(self.ui_font, 11, QFont.Weight.DemiBold))
+        icon = _render_svg_icon(fallback_icon_path(icon_name), self.theme.text, QSize(18, 18))
+        if not icon.isNull():
+            button.setIcon(icon)
+            button.setIconSize(QSize(18, 18))
+        else:
+            button.setText(f"{material_icon(icon_name)}  {label}")
         return button
 
     def _apply_styles(self) -> None:
