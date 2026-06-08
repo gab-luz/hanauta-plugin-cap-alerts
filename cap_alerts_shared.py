@@ -15,6 +15,7 @@ from urllib import parse, request
 def _load_weather_backend():
     candidates = [
         Path.home() / "dev" / "hanauta-plugin-weather" / "weather_backend.py",
+        Path("/mnt/outros/DEV/hanauta-plugin-weather/weather_backend.py"),
     ]
     for candidate in candidates:
         if not candidate.exists():
@@ -26,7 +27,12 @@ def _load_weather_backend():
         sys.modules[spec.name] = module
         spec.loader.exec_module(module)
         return module
-    raise ImportError("weather backend not found")
+    try:
+        from pyqt.shared import weather as module
+
+        return module
+    except Exception as exc:
+        raise ImportError("weather backend not found") from exc
 
 
 _WEATHER = _load_weather_backend()
