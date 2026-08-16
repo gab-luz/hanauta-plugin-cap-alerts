@@ -11,3 +11,6 @@ build/
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
+logs/
+.dictator/
+.dictate.toml
