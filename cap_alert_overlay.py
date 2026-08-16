@@ -59,6 +59,7 @@ if str(APP_DIR) not in sys.path:
 from pyqt.shared.runtime import entry_command
 from cap_alerts_shared import AnimatedWeatherIcon, animated_icon_path, cap_alert_accent
 from pyqt.shared.theme import blend, load_theme_palette, rgba
+from cap_alerts_i18n import tr
 
 FONTS_DIR = APP_DIR.parents[1] / "assets" / "fonts"
 
@@ -144,11 +145,11 @@ class CapAlertOverlay(QWidget):
         self.display_font = detect_font("Rubik", fonts.get("ui_display", ""), "Outfit", self.ui_font)
         self.icon_font = detect_font(fonts.get("material_icons", ""), "Material Icons", self.ui_font)
         self.theme = load_theme_palette()
-        self.title_text = title.strip() or "Weather alert"
-        self.headline_text = headline.strip() or "Official alert received."
-        self.area_text = area.strip() or "Affected area unavailable."
-        self.tip_text = tip.strip() or "Follow official safety guidance."
-        self.contact_text = contact.strip() or "Official local emergency services"
+        self.title_text = title.strip() or tr("overlay.title_default")
+        self.headline_text = headline.strip() or tr("overlay.headline_default")
+        self.area_text = area.strip() or tr("overlay.affected_area")
+        self.tip_text = tip.strip() or tr("overlay.tip_default")
+        self.contact_text = contact.strip() or tr("overlay.contact_default")
         self.url = url.strip()
         self.icon_name = icon_name.strip() or "warning"
         self.severity = severity.strip() or "Unknown"
@@ -163,7 +164,7 @@ class CapAlertOverlay(QWidget):
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Window
         )
-        self.setWindowTitle("Hanauta CAP Alert")
+        self.setWindowTitle(tr("overlay.details_window"))
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
         self._build_ui()
@@ -214,7 +215,7 @@ class CapAlertOverlay(QWidget):
 
         title_col = QVBoxLayout()
         title_col.setSpacing(8)
-        overline = QLabel("OFFICIAL ALERT")
+        overline = QLabel(tr("overlay.official_alert"))
         overline.setObjectName("overline")
         overline.setFont(QFont(self.ui_font, 10, QFont.Weight.DemiBold))
         title = QLabel(self.title_text)
@@ -237,7 +238,7 @@ class CapAlertOverlay(QWidget):
         area_layout = QVBoxLayout(area_card)
         area_layout.setContentsMargins(16, 14, 16, 14)
         area_layout.setSpacing(8)
-        area_label = QLabel("Affected Area")
+        area_label = QLabel(tr("overlay.affected_area"))
         area_label.setObjectName("metaLabel")
         area_body = QLabel(self.area_text)
         area_body.setObjectName("infoBody")
@@ -251,7 +252,7 @@ class CapAlertOverlay(QWidget):
         tip_layout = QVBoxLayout(tip_card)
         tip_layout.setContentsMargins(18, 16, 18, 16)
         tip_layout.setSpacing(8)
-        tip_label = QLabel("What To Do Right Now")
+        tip_label = QLabel(tr("overlay.what_to_do"))
         tip_label.setObjectName("metaLabel")
         tip_body = QLabel(self.tip_text)
         tip_body.setObjectName("tipBody")
@@ -268,7 +269,7 @@ class CapAlertOverlay(QWidget):
         contact_layout = QVBoxLayout(contact_card)
         contact_layout.setContentsMargins(16, 14, 16, 14)
         contact_layout.setSpacing(6)
-        contact_label = QLabel("Emergency Contact")
+        contact_label = QLabel(tr("overlay.emergency_contact"))
         contact_label.setObjectName("metaLabel")
         contact_value = QLabel(self.contact_text)
         contact_value.setObjectName("contactValue")
@@ -282,9 +283,9 @@ class CapAlertOverlay(QWidget):
         url_layout = QVBoxLayout(url_card)
         url_layout.setContentsMargins(16, 14, 16, 14)
         url_layout.setSpacing(6)
-        url_label = QLabel("Official Bulletin")
+        url_label = QLabel(tr("overlay.official_bulletin"))
         url_label.setObjectName("metaLabel")
-        url_value = QLabel(self.url or "Open the detailed alert popup for the official source link.")
+        url_value = QLabel(self.url or tr("overlay.details_hint"))
         url_value.setObjectName("infoBody")
         url_value.setWordWrap(True)
         url_layout.addWidget(url_label)
@@ -298,11 +299,11 @@ class CapAlertOverlay(QWidget):
         actions_layout.setContentsMargins(10, 10, 10, 10)
         actions_layout.setSpacing(12)
 
-        dismiss = self._button("Dismiss", "close", primary=False)
+        dismiss = self._button(tr("overlay.dismiss"), "close", primary=False)
         dismiss.clicked.connect(self.close)
-        details = self._button("Open Details", "open_in_new", primary=True)
+        details = self._button(tr("overlay.open_details"), "open_in_new", primary=True)
         details.clicked.connect(self._open_details)
-        region = self._button("Region Settings", "warning", primary=False)
+        region = self._button(tr("overlay.region_settings"), "warning", primary=False)
         region.clicked.connect(self._open_region)
         actions_layout.addWidget(dismiss)
         actions_layout.addWidget(details)
@@ -503,9 +504,9 @@ class CapAlertOverlay(QWidget):
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Fullscreen CAP alert overlay")
-    parser.add_argument("--title", default="Weather Alert")
-    parser.add_argument("--headline", default="Official alert received.")
+    parser = argparse.ArgumentParser(description=tr("overlay.details_window"))
+    parser.add_argument("--title", default=tr("overlay.title_default"))
+    parser.add_argument("--headline", default=tr("overlay.headline_default"))
     parser.add_argument("--area", default="")
     parser.add_argument("--tip", default="")
     parser.add_argument("--contact", default="")

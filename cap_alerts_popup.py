@@ -43,6 +43,7 @@ if str(APP_DIR) not in sys.path:
 from cap_alerts_shared import (
     AnimatedWeatherIcon,
     CapAlert,
+    alert_display_label,
     alert_accent_color,
     animated_icon_path,
     configured_alert_location,
@@ -53,6 +54,8 @@ from cap_alerts_shared import (
 )
 from pyqt.shared.runtime import entry_command
 from pyqt.shared.theme import load_theme_palette, palette_mtime, relative_luminance, rgba
+
+from cap_alerts_i18n import tr
 
 FONTS_DIR = APP_DIR.parents[1] / "assets" / "fonts"
 PLUGIN_ASSETS_DIR = HERE / "assets"
@@ -127,7 +130,7 @@ class AlertWorker(QThread):
     def run(self) -> None:
         location = configured_alert_location()
         if location is None and not test_mode_enabled():
-            self.failed.emit("Choose a shared location in Region settings first.")
+            self.failed.emit(tr("popup.no_location"))
             return
         alerts = fetch_active_alerts(location)
         self.loaded.emit(location, alerts)
@@ -166,7 +169,11 @@ class AlertCard(QFrame):
 
         meta_row = QHBoxLayout()
         meta_row.setSpacing(8)
-        for text in (alert.severity, alert.urgency, relative_expiry(alert) or "Live"):
+        for text in (
+            alert_display_label("severity", alert.severity),
+            alert_display_label("urgency", alert.urgency),
+            relative_expiry(alert) or tr("popup.live_feed"),
+        ):
             chip = QLabel(text)
             chip.setObjectName("metaChip")
             chip.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -176,7 +183,7 @@ class AlertCard(QFrame):
         meta_row.addStretch(1)
         layout.addLayout(meta_row)
 
-        area = QLabel(alert.area_desc or "Affected area unavailable.")
+        area = QLabel(alert.area_desc or tr("overlay.affected_area"))
         area.setObjectName("alertBody")
         area.setWordWrap(True)
         area.setFont(QFont(ui_font, 10))
@@ -197,9 +204,9 @@ class AlertCard(QFrame):
         contacts = QLabel(
             "\n".join(
                 [
-                    f"Source: {alert.sender_name}",
-                    f"Emergency: {alert.contact_number or 'Official local emergency services'}",
-                    f"Official bulletin: {alert.web or 'https://www.weather.gov/alerts'}",
+                    tr("popup.contact_source", source=alert.sender_name),
+                    tr("popup.contact_emergency", contact=alert.contact_number or tr("overlay.contact_default")),
+                    tr("popup.contact_official", url=alert.web or "https://www.weather.gov/alerts"),
                 ]
             )
         )
@@ -211,7 +218,7 @@ class AlertCard(QFrame):
 
         actions = QHBoxLayout()
         actions.addStretch(1)
-        open_button = QPushButton("Open official alert")
+        open_button = QPushButton(tr("popup.open_official"))
         open_button.setObjectName("alertButton")
         open_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         open_button.setFont(QFont(ui_font, 10, QFont.Weight.DemiBold))
@@ -252,7 +259,7 @@ class CapAlertsPopup(QWidget):
             | Qt.WindowType.FramelessWindowHint
             | Qt.WindowType.WindowStaysOnTopHint
         )
-        self.setWindowTitle("Hanauta CAP Alerts")
+        self.setWindowTitle(tr("overlay.details_window"))
         self.setFixedSize(508, 690)
 
         self._build_ui()
@@ -282,13 +289,13 @@ class CapAlertsPopup(QWidget):
         header.setSpacing(10)
         titles = QVBoxLayout()
         titles.setSpacing(4)
-        eyebrow = QLabel("CAP ALERTS")
+        eyebrow = QLabel(tr("popup.eyebrow"))
         eyebrow.setObjectName("eyebrow")
         eyebrow.setFont(QFont(self.ui_font, 9, QFont.Weight.DemiBold))
-        self.title_label = QLabel("Official local alerts")
+        self.title_label = QLabel(tr("popup.title"))
         self.title_label.setObjectName("title")
         self.title_label.setFont(QFont(self.display_font, 22, QFont.Weight.DemiBold))
-        self.subtitle = QLabel("Helpful info, contacts, and official alert guidance.")
+        self.subtitle = QLabel(tr("popup.subtitle"))
         self.subtitle.setObjectName("subtitle")
         self.subtitle.setFont(QFont(self.ui_font, 9))
         self.subtitle.setWordWrap(True)
@@ -315,8 +322,8 @@ class CapAlertsPopup(QWidget):
         self.close_button.setFont(QFont(self.icon_font, 18))
         self.close_button.clicked.connect(self.close)
         self._apply_header_icon_fallbacks()
-        self.refresh_button.setToolTip("Refresh alerts")
-        self.close_button.setToolTip("Close")
+        self.refresh_button.setToolTip(tr("popup.refresh"))
+        self.close_button.setToolTip(tr("popup.close"))
         actions.addWidget(self.refresh_button)
         actions.addWidget(self.settings_button)
         actions.addWidget(self.close_button)
@@ -335,11 +342,11 @@ class CapAlertsPopup(QWidget):
         hero_top.addWidget(self.hero_icon, 0, Qt.AlignmentFlag.AlignTop)
         hero_titles = QVBoxLayout()
         hero_titles.setSpacing(4)
-        self.hero_title = QLabel("Watching local official alerts")
+        self.hero_title = QLabel(tr("popup.live_feed"))
         self.hero_title.setObjectName("heroTitle")
         self.hero_title.setWordWrap(True)
         self.hero_title.setFont(QFont(self.display_font, 19, QFont.Weight.DemiBold))
-        self.status_label = QLabel("Loading official alerts…")
+        self.status_label = QLabel(tr("popup.loading"))
         self.status_label.setObjectName("status")
         self.status_label.setWordWrap(True)
         hero_titles.addWidget(self.hero_title)
@@ -349,12 +356,12 @@ class CapAlertsPopup(QWidget):
 
         self.hero_meta_row = QHBoxLayout()
         self.hero_meta_row.setSpacing(8)
-        self.hero_scope = QLabel("Live feed")
+        self.hero_scope = QLabel(tr("popup.live_feed"))
         self.hero_scope.setObjectName("metaChip")
         self.hero_scope.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.hero_scope.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.hero_scope.setFont(QFont(self.ui_font, 9, QFont.Weight.DemiBold))
-        self.hero_location = QLabel("Waiting for location")
+        self.hero_location = QLabel(tr("popup.no_location"))
         self.hero_location.setObjectName("heroMeta")
         self.hero_location.setWordWrap(True)
         self.hero_meta_row.addWidget(self.hero_scope, 0)
@@ -532,7 +539,7 @@ class CapAlertsPopup(QWidget):
         if self.worker is not None and self.worker.isRunning():
             return
         self._clear_cards()
-        self.status_label.setText("Loading official alerts…")
+        self.status_label.setText(tr("popup.loading"))
         self.worker = AlertWorker()
         self.worker.loaded.connect(self._populate_alerts)
         self.worker.failed.connect(self._show_error)
@@ -543,40 +550,40 @@ class CapAlertsPopup(QWidget):
         location = location_obj
         alerts = alerts_obj
         demo = test_mode_enabled()
-        label = location.label if hasattr(location, "label") else ("demo mode" if demo else "your saved location")
+        label = location.label if hasattr(location, "label") else (tr("popup.demo_feed") if demo else tr("popup.no_location"))
         if not isinstance(alerts, list) or not alerts:
             self._accent = "#F6C945"
             self._apply_styles()
-            self.title_label.setText("No active official alerts")
-            self.hero_title.setText("No current alert bulletin")
+            self.title_label.setText(tr("popup.no_alerts_title"))
+            self.hero_title.setText(tr("popup.no_alerts_hero"))
             self.hero_location.setText(label)
             self.hero_icon.set_icon_path(animated_icon_path("not-available"))
             self.status_label.setText(
-                "Demo mode is enabled but no sample alerts were generated."
+                tr("popup.no_alerts_demo")
                 if demo
-                else f"No active official alerts for {label}."
+                else tr("popup.no_alerts_live", label=label)
             )
             return
-        self.title_label.setText(f"{len(alerts)} active alert(s)")
+        self.title_label.setText(tr("popup.active_alerts", count=len(alerts)))
         top = alerts[0] if isinstance(alerts[0], CapAlert) else None
         if top is not None:
             self._accent = alert_accent_color(top)
             self._apply_styles()
             self.hero_title.setText(top.event)
             self.hero_icon.set_icon_path(animated_icon_path(top.icon_name))
-        self.hero_scope.setText("Demo feed" if demo else "Live feed")
+        self.hero_scope.setText(tr("popup.demo_feed") if demo else tr("popup.live_feed"))
         self.hero_location.setText(label)
         self.status_label.setText(
-            "Demo mode is enabled. These are sample alerts from random countries for UI testing."
+            tr("popup.demo_status")
             if demo
-            else f"Official alerts affecting {label}."
+            else tr("popup.live_status", label=label)
         )
         for alert in alerts:
             if isinstance(alert, CapAlert):
                 self.content_layout.insertWidget(self.content_layout.count() - 1, AlertCard(alert, self.ui_font, self.display_font))
 
     def _show_error(self, message: str) -> None:
-        self.title_label.setText("Alerts unavailable")
+        self.title_label.setText(tr("popup.no_alerts_title"))
         self.status_label.setText(message)
 
     def _finish_worker(self) -> None:

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
@@ -28,7 +29,15 @@ NWS_HEADERS = {
 
 def _normalized(text: str) -> str:
     base = unicodedata.normalize("NFKD", text or "").encode("ascii", "ignore").decode("ascii")
-    return " ".join(base.lower().replace("-", " ").split())
+    return " ".join(re.sub(r"[^0-9a-zA-Z]+", " ", base.lower()).split())
+
+
+def _write_payload(payload: dict) -> None:
+    SERVICE_DIR.mkdir(parents=True, exist_ok=True)
+    tmp_file = OUTPUT_FILE.with_suffix(f"{OUTPUT_FILE.suffix}.tmp")
+    data = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+    tmp_file.write_text(data, encoding="utf-8")
+    tmp_file.replace(OUTPUT_FILE)
 
 
 def _request_json(url: str, headers: dict[str, str], timeout: float = 10.0) -> dict:
@@ -210,7 +219,6 @@ def _fetch_nws(location: dict) -> list[dict]:
 
 def main() -> int:
     settings = _load_settings()
-    SERVICE_DIR.mkdir(parents=True, exist_ok=True)
 
     location = _location(settings)
     payload: dict = {
@@ -221,7 +229,7 @@ def main() -> int:
     }
 
     if not _service_enabled(settings) or location is None:
-        OUTPUT_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        _write_payload(payload)
         return 0
 
     try:
@@ -234,7 +242,7 @@ def main() -> int:
         payload["alerts"] = []
 
     payload["updated_at"] = datetime.now(timezone.utc).isoformat()
-    OUTPUT_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    _write_payload(payload)
     return 0
 
 

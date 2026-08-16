@@ -5,6 +5,8 @@ from pathlib import Path
 
 from PyQt6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
+from cap_alerts_i18n import tr
+
 PLUGIN_ROOT = Path(__file__).resolve().parent
 SERVICE_KEY = "cap_alerts"
 
@@ -39,8 +41,8 @@ def build_cap_alerts_service_section(window, api: dict[str, object]) -> QWidget:
     layout.addWidget(
         SettingsRow(
             material_icon("warning"),
-            "Show alert chip on bar",
-            "Displays a warning chip on the bar when active alerts affect your saved location.",
+            tr("service.show_alert_chip.title"),
+            tr("service.show_alert_chip.description"),
             window.icon_font,
             window.ui_font,
             bar_switch,
@@ -53,8 +55,8 @@ def build_cap_alerts_service_section(window, api: dict[str, object]) -> QWidget:
     layout.addWidget(
         SettingsRow(
             material_icon("science"),
-            "Demo alert chip",
-            "Use sample alert data to test the chip and popup behavior.",
+            tr("service.demo_alert_chip.title"),
+            tr("service.demo_alert_chip.description"),
             window.icon_font,
             window.ui_font,
             test_mode_switch,
@@ -62,7 +64,7 @@ def build_cap_alerts_service_section(window, api: dict[str, object]) -> QWidget:
     )
 
     window.cap_alerts_status = QLabel(
-        "Uses your saved shared location for live alerts. If you use a VPN, save your real region here so alerts stay accurate."
+        tr("service.status")
     )
     window.cap_alerts_status.setWordWrap(True)
     window.cap_alerts_status.setStyleSheet("color: rgba(246,235,247,0.72);")
@@ -70,8 +72,8 @@ def build_cap_alerts_service_section(window, api: dict[str, object]) -> QWidget:
 
     section = ExpandableServiceSection(
         SERVICE_KEY,
-        "CAP Alerts",
-        "Official active local alerts surfaced as a warning chip on the bar.",
+        tr("service.name"),
+        tr("service.description"),
         material_icon("warning"),
         window.icon_font,
         window.ui_font,
@@ -87,7 +89,7 @@ def build_cap_alerts_service_section(window, api: dict[str, object]) -> QWidget:
 def register_hanauta_plugin() -> dict[str, object]:
     return {
         "id": SERVICE_KEY,
-        "name": "CAP Alerts",
+        "name": tr("service.name"),
         "api_min_version": 1,
         "service_sections": [
             {

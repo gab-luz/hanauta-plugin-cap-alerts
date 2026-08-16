@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import importlib.util
 import random
+import re
 import sys
 import unicodedata
 from dataclasses import dataclass
@@ -10,6 +11,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib import parse, request
+
+from cap_alerts_i18n import has_translation, tr
 
 
 def _load_weather_backend():
@@ -167,7 +170,16 @@ def configured_alert_location() -> WeatherCity | None:
 
 def _normalized(text: str) -> str:
     base = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
-    return " ".join(base.lower().replace("-", " ").split())
+    return " ".join(re.sub(r"[^0-9a-zA-Z]+", " ", base.lower()).split())
+
+
+def alert_display_label(category: str, value: str) -> str:
+    text = (value or "").strip()
+    if not text:
+        return ""
+    token = _normalized(text).replace(" ", "_")
+    key = f"alert.{category}.{token}"
+    return tr(key) if has_translation(key) else text
 
 
 def _severity_from_inmet(level: str) -> str:
@@ -500,28 +512,28 @@ def relative_expiry(alert: CapAlert) -> str:
     delta = moment - now
     minutes = int(delta.total_seconds() // 60)
     if minutes <= 0:
-        return "Ending now"
+        return tr("alert.expiry.now")
     if minutes < 60:
-        return f"Ends in {minutes} min"
+        return tr("alert.expiry.minutes", count=minutes)
     hours = minutes // 60
     if hours < 24:
-        return f"Ends in {hours}h"
+        return tr("alert.expiry.hours", count=hours)
     days = hours // 24
-    return f"Ends in {days}d"
+    return tr("alert.expiry.days", count=days)
 
 
 def fallback_tip(alert: CapAlert) -> str:
     lowered = alert.event.lower()
     if "thunder" in lowered or "tornado" in lowered or "tempestade" in lowered or "granizo" in lowered:
-        return "Move indoors, stay away from windows, and monitor official local instructions."
+        return tr("alert.fallback.thunder")
     if "flood" in lowered or "chuva" in lowered or "alag" in lowered:
-        return "Move to higher ground immediately and never drive through flood waters."
+        return tr("alert.fallback.flood")
     if "wind" in lowered or "hurricane" in lowered or "tropical" in lowered or "vento" in lowered or "vendaval" in lowered:
-        return "Shelter away from windows, secure loose objects, and follow official evacuation guidance."
+        return tr("alert.fallback.wind")
     if "snow" in lowered or "ice" in lowered or "blizzard" in lowered or "neve" in lowered or "geada" in lowered:
-        return "Avoid unnecessary travel, keep charged devices nearby, and prepare for outages."
+        return tr("alert.fallback.snow")
     if "heat" in lowered or "calor" in lowered:
-        return "Hydrate, limit exertion, and check on vulnerable people nearby."
+        return tr("alert.fallback.heat")
     if "fire" in lowered or "incendio" in lowered or "incêndio" in lowered:
-        return "Be ready to leave quickly, follow evacuation orders, and watch official fire updates."
-    return "Follow official alert instructions and call emergency services if you are in immediate danger."
+        return tr("alert.fallback.fire")
+    return tr("alert.fallback.default")
